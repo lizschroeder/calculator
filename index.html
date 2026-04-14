@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>AP Stats Calculator (Z & t)</title>
+<title>Statistics Calculator</title>
 
 <script src="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css">
@@ -33,6 +33,7 @@ body {
   background: white;
   border-radius: 10px;
 }
+
 input, select {
   width: 100%;
   margin: 6px 0;
@@ -43,7 +44,7 @@ input, select {
 
 <body>
 
-<h2>AP Stats Z / t Calculator</h2>
+<h2>Statistics Calculator (Z & t)</h2>
 
 <div class="container">
 
@@ -58,13 +59,14 @@ input, select {
 
 <label>Mode</label>
 <select id="mode">
-  <option value="left">P(Z < z₁)</option>
-  <option value="right">P(Z > z₁)</option>
-  <option value="between">P(z₁ < Z < z₂)</option>
+  <option value="left">P(X < z₁)</option>
+  <option value="right">P(X > z₁)</option>
+  <option value="between">P(z₁ < X < z₂)</option>
   <option value="invnorm">invNorm</option>
+  <option value="invt">invT</option>
 </select>
 
-<label>z₁</label>
+<label>z₁ / p-value</label>
 <input id="z1" type="number" value="0" step="0.1">
 
 <label>z₂</label>
@@ -84,24 +86,24 @@ input, select {
 
 <script>
 
-// ---------- BOARD ----------
+// ================= BOARD =================
 const board = JXG.JSXGraph.initBoard('box', {
   boundingbox: [-4, 0.45, 4, -0.05],
   axis: true
 });
 
-// ---------- PDF ----------
+// ================= PDFs =================
 function normal(x){
   return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x);
 }
 
 function t(x, df){
-  return (1/Math.sqrt(df*Math.PI))*Math.pow(1+x*x/df, -(df+1)/2);
+  return (1/Math.sqrt(df*Math.PI))*Math.pow(1 + x*x/df, -(df+1)/2);
 }
 
-// ---------- NUMERIC INTEGRAL ----------
+// ================= INTEGRATION =================
 function integrate(f,a,b,df=null){
-  let steps = 250;
+  let steps = 300;
   let h = (b-a)/steps;
   let sum = 0;
 
@@ -117,15 +119,14 @@ function integrate(f,a,b,df=null){
   return sum;
 }
 
-// ---------- INVERSE NORMAL (approx) ----------
+// ================= INVERSE NORMAL =================
 function invNorm(p){
-  // Beasley-Springer-Moro approximation
-  let a=[-39.6968302866538,220.946098424521,-275.928510446969,138.357751867269,-30.6647980661472,2.50662827745924];
-  let b=[-54.4760987982241,161.585836858041,-155.698979859887,66.8013118877197,-13.2806815528857];
-  let c=[-0.00778489400243029,-0.322396458041136,-2.40075827716184,-2.54973253934373,4.37466414146497,2.93816398269878];
-  let d=[0.00778469570904146,0.32246712907004,2.445134137143,3.75440866190742];
+  let a=[-39.6968,220.9461,-275.9285,138.3578,-30.6648,2.5066];
+  let b=[-54.4761,161.5858,-155.6990,66.8013,-13.2807];
+  let c=[-0.00778,-0.32239,-2.40075,-2.54973,4.37466,2.93816];
+  let d=[0.00778,0.32246,2.44513,3.75440];
 
-  let q, r;
+  let q;
 
   if(p < 0.5){
     q = Math.sqrt(-2*Math.log(p));
@@ -138,12 +139,26 @@ function invNorm(p){
   }
 }
 
-// ---------- CURVE ----------
+// ================= INVERSE T =================
+function invT(p, df){
+  let low = -10, high = 10;
+
+  for(let i=0;i<60;i++){
+    let mid = (low+high)/2;
+    let cdf = integrate(t,-10,mid,df);
+
+    if(cdf < p) low = mid;
+    else high = mid;
+  }
+
+  return (low+high)/2;
+}
+
+// ================= STATE =================
+let fillPoly = null;
 let curve = board.create('functiongraph',[normal,-4,4]);
 
-let shade;
-
-// ---------- UPDATE ----------
+// ================= UPDATE =================
 function update(){
 
   let dist = document.getElementById('dist').value;
@@ -154,63 +169,88 @@ function update(){
 
   let pdf = (dist==='z') ? normal : (x)=>t(x,df);
 
+  if(fillPoly){
+    board.removeObject(fillPoly);
+    fillPoly = null;
+  }
+
   let area = 0;
 
-  // ---------- REMOVE OLD SHADE ----------
-  if(shade) board.removeObject(shade);
-
-  // ---------- MODES ----------
+  // ================= LEFT =================
   if(mode==='left'){
     area = integrate(pdf,-4,z1,dist==='t'?df:null);
 
-    shade = board.create('curve',[
-      Array.from({length:100},(_,i)=>-4+i*(z1+4)/99),
-      Array.from({length:100},(_,i)=>pdf(-4+i*(z1+4)/99,dist==='t'?df:null))
-    ],{fillOpacity:0.3});
-
-  }
-
-  else if(mode==='right'){
-    area = integrate(pdf,z1,4,dist==='t'?df:null);
-
-    shade = board.create('curve',[
-      Array.from({length:100},(_,i)=>z1+i*(4-z1)/99),
-      Array.from({length:100},(_,i)=>pdf(z1+i*(4-z1)/99,dist==='t'?df:null))
-    ],{fillOpacity:0.3});
-  }
-
-  else if(mode==='between'){
-    area = integrate(pdf,z1,z2,dist==='t'?df:null);
-
     let xs=[], ys=[];
-    for(let i=0;i<100;i++){
-      let x = z1 + i*(z2-z1)/99;
+    for(let i=0;i<=120;i++){
+      let x = -4 + i*(z1+4)/120;
       xs.push(x);
       ys.push(pdf(x,dist==='t'?df:null));
     }
 
-    shade = board.create('curve',[xs,ys],{fillOpacity:0.3});
+    xs.push(z1,-4);
+    ys.push(0,0);
+
+    fillPoly = board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
+      {fillOpacity:0.3, borders:{strokeWidth:0}});
   }
 
+  // ================= RIGHT =================
+  else if(mode==='right'){
+    area = integrate(pdf,z1,4,dist==='t'?df:null);
+
+    let xs=[], ys=[];
+    for(let i=0;i<=120;i++){
+      let x = z1 + i*(4-z1)/120;
+      xs.push(x);
+      ys.push(pdf(x,dist==='t'?df:null));
+    }
+
+    xs.push(4,z1);
+    ys.push(0,0);
+
+    fillPoly = board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
+      {fillOpacity:0.3, borders:{strokeWidth:0}});
+  }
+
+  // ================= BETWEEN =================
+  else if(mode==='between'){
+    area = integrate(pdf,z1,z2,dist==='t'?df:null);
+
+    let xs=[], ys=[];
+    for(let i=0;i<=120;i++){
+      let x = z1 + i*(z2-z1)/120;
+      xs.push(x);
+      ys.push(pdf(x,dist==='t'?df:null));
+    }
+
+    xs.push(z2,z1);
+    ys.push(0,0);
+
+    fillPoly = board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
+      {fillOpacity:0.3, borders:{strokeWidth:0}});
+  }
+
+  // ================= INVERSE NORMAL =================
   else if(mode==='invnorm'){
     let z = invNorm(z1);
     document.getElementById('result').innerText =
       "z ≈ " + z.toFixed(4);
-
-    shade = board.create('curve',[
-      Array.from({length:100},(_,i)=>-4+i*(z+4)/99),
-      Array.from({length:100},(_,i)=>normal(-4+i*(z+4)/99))
-    ],{fillOpacity:0.3});
   }
 
-  if(mode!=='invnorm'){
+  // ================= INVERSE T =================
+  else if(mode==='invt'){
+    let tval = invT(z1, df);
+    document.getElementById('result').innerText =
+      "t ≈ " + tval.toFixed(4);
+  }
+
+  else {
     document.getElementById('result').innerText =
       "Area ≈ " + area.toFixed(4);
   }
-
-  board.update();
 }
 
+// ================= EVENTS =================
 document.querySelectorAll('input,select').forEach(e=>{
   e.addEventListener('input',update);
 });
