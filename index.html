@@ -21,7 +21,7 @@ body {
 }
 
 .panel {
-  width: 320px;
+  width: 330px;
   background: white;
   padding: 15px;
   border-radius: 10px;
@@ -94,35 +94,48 @@ const board = JXG.JSXGraph.initBoard('box', {
   axis: true
 });
 
-// ================= NORMAL PDF =================
+// ================= STATE =================
+let fillPoly = null;
+let vLine1 = null;
+let vLine2 = null;
+let label1 = null;
+let label2 = null;
+
+// ================= PDFS =================
 function normal(x){
   return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x);
 }
 
-// ================= STABLE t PDF =================
-// FIXED: correct scaling behavior so it converges to normal as df → ∞
+// stable t-distribution (correct convergence behavior)
 function t(x, df){
-  let c = Math.exp(
-    gammaln((df+1)/2) -
-    gammaln(df/2) -
-    0.5*Math.log(df*Math.PI)
-  );
-  return c * Math.pow(1 + (x*x)/df, -(df+1)/2);
+  let num = gamma((df+1)/2);
+  let den = Math.sqrt(df*Math.PI) * gamma(df/2);
+  return (num/den) * Math.pow(1 + (x*x)/df, -(df+1)/2);
 }
 
-// log gamma approximation (stable)
-function gammaln(z){
-  let cof=[76.18009172947146,-86.50532032941677,24.01409824083091,
-           -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
-  let x=z, y=z;
-  let tmp=x+5.5;
-  tmp-=(x+0.5)*Math.log(tmp);
-  let ser=1.000000000190015;
-  for(let j=0;j<6;j++){
-    y+=1;
-    ser+=cof[j]/y;
-  }
-  return -tmp+Math.log(2.5066282746310005*ser/x);
+// gamma approximation
+function gamma(z){
+  let p = [
+    0.99999999999980993,
+    676.5203681218851,
+    -1259.1392167224028,
+    771.32342877765313,
+    -176.61502916214059,
+    12.507343278686905,
+    -0.13857109526572012,
+    9.9843695780195716e-6,
+    1.5056327351493116e-7
+  ];
+
+  let g = 7;
+  if(z < 0.5) return Math.PI / (Math.sin(Math.PI*z)*gamma(1-z));
+
+  z -= 1;
+  let x = p[0];
+  for(let i=1;i<p.length;i++) x += p[i]/(z+i);
+
+  let t = z + g + 0.5;
+  return Math.sqrt(2*Math.PI)*Math.pow(t,z+0.5)*Math.exp(-t)*x;
 }
 
 // ================= INTEGRATION =================
@@ -163,7 +176,7 @@ function invNorm(p){
   }
 }
 
-// ================= INVERSE t =================
+// ================= INVERSE T =================
 function invT(p, df){
   let low=-10, high=10;
 
@@ -178,9 +191,18 @@ function invT(p, df){
   return (low+high)/2;
 }
 
-// ================= STATE =================
-let fillPoly=null;
-let curve=board.create('functiongraph',[normal,-4,4]);
+// ================= MARKER DRAW =================
+function drawLine(x){
+  return board.create('line', [[x,0],[x,0.45]], {
+    dash:2,
+    strokeColor:'black',
+    strokeWidth:1
+  });
+}
+
+function drawLabel(x){
+  return board.create('text',[x,-0.02,function(){ return x.toFixed(2); }]);
+}
 
 // ================= UPDATE =================
 function update(){
@@ -193,16 +215,19 @@ function update(){
 
   let pdf=(dist==='z')?normal:(x)=>t(x,df);
 
+  // update labels
   document.getElementById('lab1').innerText=(dist==='z')?"z₁":"t₁";
   document.getElementById('lab2').innerText=(dist==='z')?"z₂":"t₂";
 
-  if(fillPoly){
-    board.removeObject(fillPoly);
-    fillPoly=null;
-  }
+  // clear old graphics
+  if(fillPoly) board.removeObject(fillPoly);
+  if(vLine1) board.removeObject(vLine1);
+  if(vLine2) board.removeObject(vLine2);
+  if(label1) board.removeObject(label1);
+  if(label2) board.removeObject(label2);
 
   let result=0;
-  let showProb=true;
+  let show=true;
 
   // LEFT
   if(mode==='left'){
@@ -214,11 +239,15 @@ function update(){
       xs.push(x);
       ys.push(pdf(x,dist==='t'?df:null));
     }
+
     xs.push(v1,-4);
     ys.push(0,0);
 
     fillPoly=board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
       {fillOpacity:0.3});
+
+    vLine1=drawLine(v1);
+    label1=drawLabel(v1);
   }
 
   // RIGHT
@@ -231,11 +260,15 @@ function update(){
       xs.push(x);
       ys.push(pdf(x,dist==='t'?df:null));
     }
+
     xs.push(4,v1);
     ys.push(0,0);
 
     fillPoly=board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
       {fillOpacity:0.3});
+
+    vLine1=drawLine(v1);
+    label1=drawLabel(v1);
   }
 
   // BETWEEN
@@ -248,34 +281,40 @@ function update(){
       xs.push(x);
       ys.push(pdf(x,dist==='t'?df:null));
     }
+
     xs.push(v2,v1);
     ys.push(0,0);
 
     fillPoly=board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
       {fillOpacity:0.3});
+
+    vLine1=drawLine(v1);
+    vLine2=drawLine(v2);
+    label1=drawLabel(v1);
+    label2=drawLabel(v2);
   }
 
-  // INV NORM
+  // INV NORMAL
   else if(mode==='invnorm'){
     result=invNorm(v1);
     document.getElementById('result').innerText="z = "+result.toFixed(4);
-    showProb=false;
+    show=false;
   }
 
   // INV T
   else if(mode==='invt'){
     result=invT(v1,df);
     document.getElementById('result').innerText="t = "+result.toFixed(4);
-    showProb=false;
+    show=false;
   }
 
-  if(showProb){
+  if(show){
     document.getElementById('result').innerText=
       "probability = "+result.toFixed(4);
   }
 }
 
-// EVENTS
+// events
 document.querySelectorAll('input,select').forEach(e=>{
   e.addEventListener('input',update);
 });
