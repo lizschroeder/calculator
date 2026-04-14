@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Stats Calculator - Inverse Tail System</title>
+<title>Distribution Calculator</title>
 
 <script src="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css">
@@ -39,12 +39,14 @@ input, select {
   margin: 6px 0;
   padding: 6px;
 }
+
+.hidden { display:none; }
 </style>
 </head>
 
 <body>
 
-<h2>Statistical Calculator (Inverse Tail System)</h2>
+<h2>Distribution calculator</h2>
 
 <div class="container">
 
@@ -59,32 +61,28 @@ input, select {
 </select>
 
 <div id="opBlock">
-
 <label>Operation</label>
 <select id="op">
-  <option value="lt">P(X < x)</option>
-  <option value="gt">P(X > x)</option>
-  <option value="bt">Two-tailed P(X < x₁ or X > x₂)</option>
+  <option value="lt">P(Z < z)</option>
+  <option value="gt">P(Z > z)</option>
+  <option value="bt">P(z1 < Z < z2)</option>
 </select>
-
 </div>
 
 <div id="tailBlock">
-
-<label>Inverse Tail</label>
-<select id="tail">
-  <option value="left">Left tail</option>
-  <option value="right">Right tail</option>
-  <option value="two">Two-tailed</option>
+<label>Operation</label>
+<select id="opInv">
+  <option value="lt">P(Z < z) = p</option>
+  <option value="gt">P(Z > z) = p</option>
+  <option value="two">P(Z < z1 or Z > z2) = p</option>
 </select>
-
 </div>
 
-<label>Input (x or p)</label>
-<input id="x1" type="number" value="0.05" step="0.01">
+<label id="mainLabel">Value of z</label>
+<input id="x1" type="number" value="0" step="0.1">
 
-<label id="x2label">Second value (two-tail only)</label>
-<input id="x2" type="number" value="1.96" step="0.1">
+<label id="secondLabel">Value (z2)</label>
+<input id="x2" type="number" value="1" step="0.1">
 
 <label id="dfLabel">df (t only)</label>
 <input id="df" type="number" value="10">
@@ -107,7 +105,7 @@ const board = JXG.JSXGraph.initBoard('box', {
   axis: true
 });
 
-// ================= PDFS =================
+// ================= PDFs =================
 function normal(x){
   return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x);
 }
@@ -118,9 +116,9 @@ function t(x, df){
   return (num/den) * Math.pow(1 + (x*x)/df, -(df+1)/2);
 }
 
-// gamma approx
+// gamma approximation
 function gamma(z){
-  let p = [
+  let p=[
     0.99999999999980993,
     676.5203681218851,
     -1259.1392167224028,
@@ -132,23 +130,23 @@ function gamma(z){
     1.5056327351493116e-7
   ];
 
-  let g = 7;
-  if(z < 0.5) return Math.PI / (Math.sin(Math.PI*z)*gamma(1-z));
+  let g=7;
+  if(z<0.5) return Math.PI/(Math.sin(Math.PI*z)*gamma(1-z));
 
-  z -= 1;
-  let x = p[0];
-  for(let i=1;i<p.length;i++) x += p[i]/(z+i);
+  z-=1;
+  let x=p[0];
+  for(let i=1;i<p.length;i++) x+=p[i]/(z+i);
 
-  let tt = z + g + 0.5;
+  let tt=z+g+0.5;
   return Math.sqrt(2*Math.PI)*Math.pow(tt,z+0.5)*Math.exp(-tt)*x;
 }
 
-// ================= CLEAN STATE =================
-let objects = [];
+// ================= STATE =================
+let objects=[];
 
 function clearAll(){
-  objects.forEach(o => board.removeObject(o));
-  objects = [];
+  objects.forEach(o=>board.removeObject(o));
+  objects=[];
 }
 
 // ================= INTEGRATION =================
@@ -190,8 +188,8 @@ function invNorm(p){
 }
 
 // ================= INVERSE T =================
-function invT(p, df){
-  let low=-10, high=10;
+function invT(p,df){
+  let low=-10,high=10;
 
   for(let i=0;i<60;i++){
     let mid=(low+high)/2;
@@ -206,17 +204,17 @@ function invT(p, df){
 
 // ================= DRAW HELPERS =================
 function line(x){
-  let l = board.create('line', [[x,0],[x,0.45]], {
-    dash:2, strokeColor:'black', strokeWidth:1
+  let l=board.create('line',[[x,0],[x,0.45]],{
+    dash:2,strokeColor:'black',strokeWidth:1
   });
   objects.push(l);
 }
 
 function shade(f,a,b,df){
-  let p = board.create('polygon',[
+  let p=board.create('polygon',[
     ...Array.from({length:120},(_,i)=>{
       let x=a+i*(b-a)/120;
-      return [x, df?f(x,df):f(x)];
+      return [x,df?f(x,df):f(x)];
     }),
     [b,0],[a,0]
   ],{fillOpacity:0.3});
@@ -224,13 +222,26 @@ function shade(f,a,b,df){
   objects.push(p);
 }
 
-function curve(f,a,b,df,color){
-  let c = board.create('functiongraph',[
+function curve(f,a,b,df){
+  let c=board.create('functiongraph',[
     df?x=>f(x,df):f,a,b
   ],{
-    strokeColor:color,
+    strokeColor:'black',
+    strokeWidth:1
+  });
+
+  objects.push(c);
+  return c;
+}
+
+function highlight(f,a,b,df){
+  let c=board.create('functiongraph',[
+    df?x=>f(x,df):f,a,b
+  ],{
+    strokeColor:'orange',
     strokeWidth:4
   });
+
   objects.push(c);
 }
 
@@ -241,7 +252,7 @@ function update(){
 
   let mode=document.getElementById('mode').value;
   let op=document.getElementById('op').value;
-  let tail=document.getElementById('tail').value;
+  let opInv=document.getElementById('opInv').value;
 
   let x1=parseFloat(document.getElementById('x1').value);
   let x2=parseFloat(document.getElementById('x2').value);
@@ -249,102 +260,109 @@ function update(){
 
   let pdf=(mode==='z'||mode==='invz')?normal:t;
 
-  document.getElementById('df').style.display =
-    (mode==='t'||mode==='invt')?'block':'none';
-
-  document.getElementById('opBlock').style.display =
+  document.getElementById('opBlock').style.display=
     (mode==='z'||mode==='t')?'block':'none';
 
-  document.getElementById('tailBlock').style.display =
+  document.getElementById('tailBlock').style.display=
     (mode==='invz'||mode==='invt')?'block':'none';
+
+  document.getElementById('df').style.display=
+    (mode==='t'||mode==='invt')?'block':'none';
+
+  document.getElementById('secondLabel').style.display=
+    (op==='bt' && (mode==='z'||mode==='t'))?'block':'none';
 
   let result=0;
 
   // ================= PROBABILITY =================
-  if(mode==='z' || mode==='t'){
+  if(mode==='z'||mode==='t'){
+
+    curve(pdf,-4,4,mode==='t'?df:null);
 
     if(op==='lt'){
-      result = integrate(pdf,-4,x1,mode==='t'?df:null);
+      result=integrate(pdf,-4,x1,mode==='t'?df:null);
       shade(pdf,-4,x1,df);
-      curve(pdf,-4,x1,df,'orange');
+      highlight(pdf,-4,x1,df);
       line(x1);
     }
 
-    else if(op==='gt'){
-      result = integrate(pdf,x1,4,mode==='t'?df:null);
+    if(op==='gt'){
+      result=integrate(pdf,x1,4,mode==='t'?df:null);
       shade(pdf,x1,4,df);
-      curve(pdf,x1,4,df,'orange');
+      highlight(pdf,x1,4,df);
       line(x1);
     }
 
-    else if(op==='bt'){
-      result = integrate(pdf,x1,x2,mode==='t'?df:null);
+    if(op==='bt'){
+      result=integrate(pdf,x1,x2,mode==='t'?df:null);
       shade(pdf,x1,x2,df);
-      curve(pdf,x1,x2,df,'orange');
+      highlight(pdf,x1,x2,df);
       line(x1); line(x2);
     }
 
-    document.getElementById('result').innerText =
-      "probability = " + result.toFixed(4);
+    document.getElementById('result').innerText=
+      "probability = "+result.toFixed(4);
   }
 
   // ================= INVERSE =================
   else {
 
-    let p = x1;
+    let p=x1;
     let z;
+
+    curve(pdf,-4,4,mode==='t'?df:null);
 
     if(mode==='invz'){
 
-      if(tail==='left'){
-        z = invNorm(p);
+      if(opInv==='lt'){
+        z=invNorm(p);
         shade(normal,-4,z,null);
+        line(z);
       }
 
-      if(tail==='right'){
-        z = invNorm(1-p);
+      if(opInv==='gt'){
+        z=invNorm(1-p);
         shade(normal,z,4,null);
+        line(z);
       }
 
-      if(tail==='two'){
-        z = invNorm(1-p/2);
-        let z2 = -z;
+      if(opInv==='two'){
+        z=invNorm(1-p/2);
+        let z2=-z;
 
         shade(normal,-4,z2,null);
         shade(normal,z,4,null);
 
-        line(z2);
+        line(z); line(z2);
       }
 
-      curve(normal,-4,4,null,'black');
-      line(z);
       document.getElementById('result').innerText="z = "+z.toFixed(4);
     }
 
     if(mode==='invt'){
 
-      if(tail==='left'){
-        z = invT(p,df);
+      if(opInv==='lt'){
+        z=invT(p,df);
         shade(t,-4,z,df);
+        line(z);
       }
 
-      if(tail==='right'){
-        z = invT(1-p,df);
+      if(opInv==='gt'){
+        z=invT(1-p,df);
         shade(t,z,4,df);
+        line(z);
       }
 
-      if(tail==='two'){
-        z = invT(1-p/2,df);
-        let z2 = -z;
+      if(opInv==='two'){
+        z=invT(1-p/2,df);
+        let z2=-z;
 
         shade(t,-4,z2,df);
         shade(t,z,4,df);
 
-        line(z2);
+        line(z); line(z2);
       }
 
-      curve(t,-4,4,df,'black');
-      line(z);
       document.getElementById('result').innerText="t = "+z.toFixed(4);
     }
   }
