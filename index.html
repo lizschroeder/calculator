@@ -25,7 +25,12 @@ input, select { width:100%; margin:6px 0; padding:6px; }
 <div class="panel">
 
 <label>Mode</label>
-<select id="mode"></select>
+<select id="mode">
+  <option value="z">Z distribution</option>
+  <option value="t">t distribution</option>
+  <option value="invz">Inverse Z</option>
+  <option value="invt">Inverse t</option>
+</select>
 
 <label>Operation</label>
 <select id="op"></select>
@@ -63,7 +68,9 @@ function clearAll(){
 }
 
 // ================= PDFS =================
-function normal(x){ return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x); }
+function normal(x){
+  return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x);
+}
 
 function tdist(x,df){
   let num=gamma((df+1)/2);
@@ -71,7 +78,6 @@ function tdist(x,df){
   return (num/den)*Math.pow(1+(x*x)/df,-(df+1)/2);
 }
 
-// gamma
 function gamma(z){
   let p=[0.99999999999980993,676.5203681218851,-1259.1392167224028,
   771.32342877765313,-176.61502916214059,12.507343278686905,
@@ -108,11 +114,15 @@ function shade(f,a,b,df){
       return [x,df?f(x,df):f(x)];
     }),
     [b,0],[a,0]
-  ],{fillOpacity:0.3}));
+  ],{fillOpacity:0.3});
 }
 
 function line(x){
   objects.push(board.create('line',[[x,0],[x,0.45]],{dash:2}));
+}
+
+function label(x,text){
+  objects.push(board.create('text',[x,-0.02,text]));
 }
 
 // ================= MATH =================
@@ -131,7 +141,6 @@ function invNorm(p){
   return Math.sqrt(2)*erfInv(2*p-1);
 }
 
-// approximation
 function erfInv(x){
   let a=0.147;
   let ln=Math.log(1-x*x);
@@ -161,20 +170,9 @@ const secondLabel=document.getElementById('secondLabel');
 const dfLabel=document.getElementById('dfLabel');
 const resultEl=document.getElementById('result');
 
-// initialize modes ONCE
-modeEl.innerHTML=`
-<option value="z">Z distribution</option>
-<option value="t">t distribution</option>
-<option value="invz">Inverse Z</option>
-<option value="invt">Inverse t</option>
-`;
-
 function updateUI(){
 
   let mode=modeEl.value;
-
-  // preserve selection
-  let old=opEl.value;
 
   if(mode==='z'){
     opEl.innerHTML=`
@@ -183,8 +181,10 @@ function updateUI(){
       <option value="bt">P(z1 < Z < z2)</option>`;
     mainLabel.innerText="Value of z";
     secondLabel.innerText="Second value of z (between only)";
-    dfLabel.style.display='none';
+    secondLabel.style.display='block';
     x2El.style.display='block';
+    dfLabel.style.display='none';
+    dfEl.style.display='none';
   }
 
   if(mode==='t'){
@@ -194,8 +194,10 @@ function updateUI(){
       <option value="bt">P(t1 < T < t2)</option>`;
     mainLabel.innerText="Value of t";
     secondLabel.innerText="Second value of t (between only)";
-    dfLabel.style.display='block';
+    secondLabel.style.display='block';
     x2El.style.display='block';
+    dfLabel.style.display='block';
+    dfEl.style.display='block';
   }
 
   if(mode==='invz'){
@@ -204,9 +206,10 @@ function updateUI(){
       <option value="gt">P(Z > z) = p</option>
       <option value="two">Two-tailed</option>`;
     mainLabel.innerText="Probability";
-    x2El.style.display='none';
     secondLabel.style.display='none';
+    x2El.style.display='none';
     dfLabel.style.display='none';
+    dfEl.style.display='none';
   }
 
   if(mode==='invt'){
@@ -215,14 +218,10 @@ function updateUI(){
       <option value="gt">P(T > t) = p</option>
       <option value="two">Two-tailed</option>`;
     mainLabel.innerText="Probability";
-    x2El.style.display='none';
     secondLabel.style.display='none';
+    x2El.style.display='none';
     dfLabel.style.display='block';
-  }
-
-  // restore selection if possible
-  if([...opEl.options].some(o=>o.value===old)){
-    opEl.value=old;
+    dfEl.style.display='block';
   }
 }
 
@@ -245,28 +244,35 @@ function update(){
   let result=0;
 
   if(mode==='z'||mode==='t'){
+
     if(op==='lt'){
       result=integrate(pdf,-4,x1,df);
       shade(pdf,-4,x1,df);
       highlight(pdf,-4,x1,df);
-      line(x1);
+      line(x1); label(x1,x1.toFixed(2));
     }
+
     if(op==='gt'){
       result=integrate(pdf,x1,4,df);
       shade(pdf,x1,4,df);
       highlight(pdf,x1,4,df);
-      line(x1);
+      line(x1); label(x1,x1.toFixed(2));
     }
+
     if(op==='bt'){
       result=integrate(pdf,x1,x2,df);
       shade(pdf,x1,x2,df);
       highlight(pdf,x1,x2,df);
       line(x1); line(x2);
+      label(x1,x1.toFixed(2));
+      label(x2,x2.toFixed(2));
     }
+
     resultEl.innerText="probability = "+result.toFixed(4);
   }
 
   else{
+
     let p=x1,z;
 
     if(mode==='invz'){
@@ -275,9 +281,9 @@ function update(){
       if(op==='two'){
         z=invNorm(1-p/2);
         shade(normal,-4,-z); shade(normal,z,4);
-        line(-z);
+        line(-z); label(-z,(-z).toFixed(2));
       }
-      line(z);
+      line(z); label(z,z.toFixed(2));
       resultEl.innerText="z = "+z.toFixed(4);
     }
 
@@ -287,15 +293,15 @@ function update(){
       if(op==='two'){
         z=invT(1-p/2,df);
         shade(tdist,-4,-z,df); shade(tdist,z,4,df);
-        line(-z);
+        line(-z); label(-z,(-z).toFixed(2));
       }
-      line(z);
+      line(z); label(z,z.toFixed(2));
       resultEl.innerText="t = "+z.toFixed(4);
     }
   }
 }
 
-// events
+// EVENTS
 modeEl.addEventListener('change',updateUI);
 document.querySelectorAll('input,select')
   .forEach(e=>e.addEventListener('input',update));
