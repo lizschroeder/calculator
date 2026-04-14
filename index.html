@@ -44,7 +44,7 @@ input, select {
 
 <body>
 
-<h2>Statistics Calculator (Z & t)</h2>
+<h2>Statistics Calculator</h2>
 
 <div class="container">
 
@@ -59,23 +59,25 @@ input, select {
 
 <label>Mode</label>
 <select id="mode">
-  <option value="left">P(X < z₁)</option>
-  <option value="right">P(X > z₁)</option>
-  <option value="between">P(z₁ < X < z₂)</option>
+  <option value="left">P(X < z₁ / t₁)</option>
+  <option value="right">P(X > z₁ / t₁)</option>
+  <option value="between">P(z₁/t₁ < X < z₂/t₂)</option>
   <option value="invnorm">invNorm</option>
   <option value="invt">invT</option>
 </select>
 
-<label>z₁ / p-value</label>
+<label id="lab1">z₁ / t₁</label>
 <input id="z1" type="number" value="0" step="0.1">
 
-<label>z₂</label>
+<label id="lab2">z₂ / t₂</label>
 <input id="z2" type="number" value="1" step="0.1">
 
 <label>df (t only)</label>
 <input id="df" type="number" value="10">
 
-<div id="result" style="margin-top:10px;font-weight:bold;"></div>
+<div id="result" style="margin-top:10px;font-weight:bold;">
+probability = 0
+</div>
 
 </div>
 
@@ -163,11 +165,17 @@ function update(){
 
   let dist = document.getElementById('dist').value;
   let mode = document.getElementById('mode').value;
-  let z1 = parseFloat(document.getElementById('z1').value);
-  let z2 = parseFloat(document.getElementById('z2').value);
+  let v1 = parseFloat(document.getElementById('z1').value);
+  let v2 = parseFloat(document.getElementById('z2').value);
   let df = parseFloat(document.getElementById('df').value);
 
   let pdf = (dist==='z') ? normal : (x)=>t(x,df);
+
+  document.getElementById('lab1').innerText =
+    (dist==='z') ? "z₁" : "t₁";
+
+  document.getElementById('lab2').innerText =
+    (dist==='z') ? "z₂" : "t₂";
 
   if(fillPoly){
     board.removeObject(fillPoly);
@@ -176,81 +184,81 @@ function update(){
 
   let area = 0;
 
-  // ================= LEFT =================
+  // LEFT
   if(mode==='left'){
-    area = integrate(pdf,-4,z1,dist==='t'?df:null);
+    area = integrate(pdf,-4,v1,dist==='t'?df:null);
 
     let xs=[], ys=[];
     for(let i=0;i<=120;i++){
-      let x = -4 + i*(z1+4)/120;
+      let x = -4 + i*(v1+4)/120;
       xs.push(x);
       ys.push(pdf(x,dist==='t'?df:null));
     }
 
-    xs.push(z1,-4);
+    xs.push(v1,-4);
     ys.push(0,0);
 
     fillPoly = board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
-      {fillOpacity:0.3, borders:{strokeWidth:0}});
+      {fillOpacity:0.3});
   }
 
-  // ================= RIGHT =================
+  // RIGHT
   else if(mode==='right'){
-    area = integrate(pdf,z1,4,dist==='t'?df:null);
+    area = integrate(pdf,v1,4,dist==='t'?df:null);
 
     let xs=[], ys=[];
     for(let i=0;i<=120;i++){
-      let x = z1 + i*(4-z1)/120;
+      let x = v1 + i*(4-v1)/120;
       xs.push(x);
       ys.push(pdf(x,dist==='t'?df:null));
     }
 
-    xs.push(4,z1);
+    xs.push(4,v1);
     ys.push(0,0);
 
     fillPoly = board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
-      {fillOpacity:0.3, borders:{strokeWidth:0}});
+      {fillOpacity:0.3});
   }
 
-  // ================= BETWEEN =================
+  // BETWEEN
   else if(mode==='between'){
-    area = integrate(pdf,z1,z2,dist==='t'?df:null);
+    area = integrate(pdf,v1,v2,dist==='t'?df:null);
 
     let xs=[], ys=[];
     for(let i=0;i<=120;i++){
-      let x = z1 + i*(z2-z1)/120;
+      let x = v1 + i*(v2-v1)/120;
       xs.push(x);
       ys.push(pdf(x,dist==='t'?df:null));
     }
 
-    xs.push(z2,z1);
+    xs.push(v2,v1);
     ys.push(0,0);
 
     fillPoly = board.create('polygon',[...xs.map((x,i)=>[x,ys[i]])],
-      {fillOpacity:0.3, borders:{strokeWidth:0}});
+      {fillOpacity:0.3});
   }
 
-  // ================= INVERSE NORMAL =================
+  // INV NORM
   else if(mode==='invnorm'){
-    let z = invNorm(z1);
+    let z = invNorm(v1);
     document.getElementById('result').innerText =
-      "z ≈ " + z.toFixed(4);
+      "probability = z = " + z.toFixed(4);
   }
 
-  // ================= INVERSE T =================
+  // INV T
   else if(mode==='invt'){
-    let tval = invT(z1, df);
+    let tval = invT(v1, df);
     document.getElementById('result').innerText =
-      "t ≈ " + tval.toFixed(4);
+      "probability = t = " + tval.toFixed(4);
   }
 
   else {
     document.getElementById('result').innerText =
-      "Area ≈ " + area.toFixed(4);
+      "probability = " + area.toFixed(4);
   }
 }
 
-// ================= EVENTS =================
+// EVENTS
 document.querySelectorAll('input,select').forEach(e=>{
   e.addEventListener('input',update);
 });
