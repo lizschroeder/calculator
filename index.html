@@ -60,12 +60,11 @@ input, select {
   <option value="invt">Inverse t</option>
 </select>
 
-<!-- distribution type -->
-<label id="opLabel">Operation</label>
+<label>Operation</label>
 <select id="op">
   <option value="lt">Less than</option>
   <option value="gt">Greater than</option>
-  <option value="bt">Between</option>
+  <option value="out">Outside</option>
 </select>
 
 <label id="lab1">x₁</label>
@@ -131,20 +130,28 @@ function gamma(z){
   return Math.sqrt(2*Math.PI)*Math.pow(tt,z+0.5)*Math.exp(-tt)*x;
 }
 
+// ================= CLEAN STATE SYSTEM =================
+let objects = [];
+
+function clearAll(){
+  objects.forEach(o => board.removeObject(o));
+  objects = [];
+}
+
 // ================= INTEGRATION =================
 function integrate(f,a,b,df=null){
-  let steps = 300;
-  let h = (b-a)/steps;
-  let sum = 0;
+  let steps=300;
+  let h=(b-a)/steps;
+  let sum=0;
 
   for(let i=0;i<steps;i++){
-    let x1 = a + i*h;
-    let x2 = a + (i+1)*h;
+    let x1=a+i*h;
+    let x2=a+(i+1)*h;
 
-    let y1 = df ? f(x1,df) : f(x1);
-    let y2 = df ? f(x2,df) : f(x2);
+    let y1=df?f(x1,df):f(x1);
+    let y2=df?f(x2,df):f(x2);
 
-    sum += (y1+y2)/2*h;
+    sum+=(y1+y2)/2*h;
   }
   return sum;
 }
@@ -184,46 +191,35 @@ function invT(p, df){
   return (low+high)/2;
 }
 
-// ================= HELPERS =================
+// ================= MARKERS =================
 function line(x){
-  return board.create('line', [[x,0],[x,0.45]], {
-    dash:2, strokeColor:'black', strokeWidth:1
+  let l = board.create('line', [[x,0],[x,0.45]], {
+    dash:2,
+    strokeColor:'black',
+    strokeWidth:1
   });
+  objects.push(l);
 }
 
-// ================= STATE =================
-let fill=null;
-let curve=board.create('functiongraph',[normal,-4,4],{
-  strokeColor:'black',
-  strokeWidth:1
-});
+function label(x, txt){
+  let t = board.create('text',[x,-0.02,txt]);
+  objects.push(t);
+}
 
-// ================= UI LOGIC =================
-function updateUI(){
-  let mode=document.getElementById('mode').value;
-  let op=document.getElementById('op');
-
-  let isProb = (mode==='z' || mode==='t');
-  let isInv = (mode==='invz' || mode==='invt');
-
-  op.style.display = isProb ? 'block' : 'none';
-  document.getElementById('x2').style.display =
-    (isProb && op.value==='bt') ? 'block' : 'none';
-
-  document.getElementById('df').style.display =
-    (mode==='t' || mode==='invt') ? 'block' : 'none';
-
-  document.getElementById('lab1').innerText =
-    (mode==='z'||mode==='invz') ? "z₁" : "t₁";
-
-  document.getElementById('lab2').innerText =
-    (mode==='z'||mode==='invz') ? "z₂" : "t₂";
+// ================= CURVE =================
+function curve(a,b,pdf,df,color,width){
+  let c = board.create('functiongraph',[df?x=>pdf(x,df):pdf,a,b],{
+    strokeColor:color,
+    strokeWidth:width
+  });
+  objects.push(c);
+  return c;
 }
 
 // ================= UPDATE =================
 function update(){
 
-  updateUI();
+  clearAll();
 
   let mode=document.getElementById('mode').value;
   let op=document.getElementById('op').value;
@@ -232,52 +228,43 @@ function update(){
   let x2=parseFloat(document.getElementById('x2').value);
   let df=parseFloat(document.getElementById('df').value);
 
-  let pdf = (mode.includes('z')) ? normal : (x)=>t(x,df);
+  let pdf = (mode==='z'||mode==='invz') ? normal : (x)=>t(x,df);
 
-  if(fill) board.removeObject(fill);
+  document.getElementById('df').style.display =
+    (mode==='t'||mode==='invt') ? 'block' : 'none';
 
   let result=0;
-
-  function shade(a,b){
-    fill = board.create('polygon',[
-      ...Array.from({length:120},(_,i)=>{
-        let x=a+i*(b-a)/120;
-        return [x,pdf(x)];
-      }),
-      [b,0],[a,0]
-    ],{fillOpacity:0.3});
-  }
-
-  function orange(a,b){
-    board.create('functiongraph',[pdf,a,b],{
-      strokeColor:'orange',
-      strokeWidth:4
-    });
-  }
 
   // ================= PROBABILITY MODES =================
   if(mode==='z' || mode==='t'){
 
     if(op==='lt'){
       result = integrate(pdf,-4,x1,mode==='t'?df:null);
-      shade(-4,x1);
-      orange(-4,x1);
+
+      curve(-4,x1,pdf,df,'orange',4);
       line(x1);
+      label(x1,x1.toFixed(2));
     }
 
     else if(op==='gt'){
       result = integrate(pdf,x1,4,mode==='t'?df:null);
-      shade(x1,4);
-      orange(x1,4);
+
+      curve(x1,4,pdf,df,'orange',4);
       line(x1);
+      label(x1,x1.toFixed(2));
     }
 
-    else if(op==='bt'){
-      result = integrate(pdf,x1,x2,mode==='t'?df:null);
-      shade(x1,x2);
-      orange(x1,x2);
-      line(x1);
-      line(x2);
+    else if(op==='out'){
+      result =
+        integrate(pdf,-4,x1,mode==='t'?df:null) +
+        integrate(pdf,x2,4,mode==='t'?df:null);
+
+      curve(-4,x1,pdf,df,'orange',4);
+      curve(x2,4,pdf,df,'orange',4);
+
+      line(x1); line(x2);
+      label(x1,x1.toFixed(2));
+      label(x2,x2.toFixed(2));
     }
 
     document.getElementById('result').innerText =
@@ -287,6 +274,11 @@ function update(){
   // ================= INV Z =================
   else if(mode==='invz'){
     result = invNorm(x1);
+
+    curve(-4,result,normal,null,'orange',4);
+    line(result);
+    label(result,result.toFixed(2));
+
     document.getElementById('result').innerText =
       "z = " + result.toFixed(4);
   }
@@ -294,6 +286,11 @@ function update(){
   // ================= INV T =================
   else if(mode==='invt'){
     result = invT(x1,df);
+
+    curve(-4,result,t,df,'orange',4);
+    line(result);
+    label(result,result.toFixed(2));
+
     document.getElementById('result').innerText =
       "t = " + result.toFixed(4);
   }
