@@ -8,39 +8,11 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css">
 
 <style>
-body {
-  font-family: Arial;
-  background: #f4f4f4;
-  margin: 0;
-  padding: 20px;
-}
-
-.container {
-  display: flex;
-  gap: 20px;
-}
-
-.panel {
-  width: 370px;
-  background: white;
-  padding: 15px;
-  border-radius: 10px;
-}
-
-.graph {
-  flex: 1;
-  height: 520px;
-  background: white;
-  border-radius: 10px;
-}
-
-input, select {
-  width: 100%;
-  margin: 6px 0;
-  padding: 6px;
-}
-
-.hidden { display:none; }
+body { font-family: Arial; background:#f4f4f4; padding:20px; }
+.container { display:flex; gap:20px; }
+.panel { width:370px; background:white; padding:15px; border-radius:10px; }
+.graph { flex:1; height:520px; background:white; border-radius:10px; }
+input, select { width:100%; margin:6px 0; padding:6px; }
 </style>
 </head>
 
@@ -62,29 +34,16 @@ input, select {
 
 <div id="opBlock">
 <label>Operation</label>
-<select id="op">
-  <option value="lt">P(Z < z)</option>
-  <option value="gt">P(Z > z)</option>
-  <option value="bt">P(z1 < Z < z2)</option>
-</select>
+<select id="op"></select>
 </div>
 
-<div id="tailBlock">
-<label>Operation</label>
-<select id="opInv">
-  <option value="lt">P(Z < z) = p</option>
-  <option value="gt">P(Z > z) = p</option>
-  <option value="two">P(Z < z1 or Z > z2) = p</option>
-</select>
-</div>
-
-<label id="mainLabel">Value of z</label>
+<label id="mainLabel">Value</label>
 <input id="x1" type="number" value="0" step="0.1">
 
-<label id="secondLabel">Value (z2)</label>
+<label id="secondLabel">Second value</label>
 <input id="x2" type="number" value="1" step="0.1">
 
-<label id="dfLabel">df (t only)</label>
+<label id="dfLabel">df</label>
 <input id="df" type="number" value="10">
 
 <div id="result" style="margin-top:10px;font-weight:bold;">
@@ -101,34 +60,25 @@ result = 0
 
 // ================= BOARD =================
 const board = JXG.JSXGraph.initBoard('box', {
-  boundingbox: [-4, 0.45, 4, -0.05],
-  axis: true
+  boundingbox: [-4,0.45,4,-0.05],
+  axis:true
 });
 
-// ================= PDFs =================
+// ================= PDFS =================
 function normal(x){
   return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x);
 }
 
-function t(x, df){
+function tdist(x,df){
   let num = gamma((df+1)/2);
-  let den = Math.sqrt(df*Math.PI) * gamma(df/2);
-  return (num/den) * Math.pow(1 + (x*x)/df, -(df+1)/2);
+  let den = Math.sqrt(df*Math.PI)*gamma(df/2);
+  return (num/den)*Math.pow(1+(x*x)/df,-(df+1)/2);
 }
 
-// gamma approximation
 function gamma(z){
-  let p=[
-    0.99999999999980993,
-    676.5203681218851,
-    -1259.1392167224028,
-    771.32342877765313,
-    -176.61502916214059,
-    12.507343278686905,
-    -0.13857109526572012,
-    9.9843695780195716e-6,
-    1.5056327351493116e-7
-  ];
+  let p=[0.99999999999980993,676.5203681218851,-1259.1392167224028,
+  771.32342877765313,-176.61502916214059,12.507343278686905,
+  -0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
 
   let g=7;
   if(z<0.5) return Math.PI/(Math.sin(Math.PI*z)*gamma(1-z));
@@ -137,43 +87,65 @@ function gamma(z){
   let x=p[0];
   for(let i=1;i<p.length;i++) x+=p[i]/(z+i);
 
-  let tt=z+g+0.5;
-  return Math.sqrt(2*Math.PI)*Math.pow(tt,z+0.5)*Math.exp(-tt)*x;
+  let t=z+g+0.5;
+  return Math.sqrt(2*Math.PI)*Math.pow(t,z+0.5)*Math.exp(-t)*x;
 }
 
-// ================= STATE =================
+// ================= CLEAN STATE =================
 let objects=[];
-
 function clearAll(){
   objects.forEach(o=>board.removeObject(o));
   objects=[];
 }
 
-// ================= INTEGRATION =================
+// ================= DRAW =================
+function drawCurve(f,df){
+  let c=board.create('functiongraph',[
+    df?x=>f(x,df):f,-4,4
+  ],{strokeColor:'black',strokeWidth:1});
+  objects.push(c);
+}
+
+function highlight(f,a,b,df){
+  let c=board.create('functiongraph',[
+    df?x=>f(x,df):f,a,b
+  ],{strokeColor:'orange',strokeWidth:4});
+  objects.push(c);
+}
+
+function shade(f,a,b,df){
+  let p=board.create('polygon',[
+    ...Array.from({length:120},(_,i)=>{
+      let x=a+i*(b-a)/120;
+      return [x,df?f(x,df):f(x)];
+    }),
+    [b,0],[a,0]
+  ],{fillOpacity:0.3});
+  objects.push(p);
+}
+
+function line(x){
+  let l=board.create('line',[[x,0],[x,0.45]],{dash:2});
+  objects.push(l);
+}
+
+// ================= MATH =================
 function integrate(f,a,b,df=null){
-  let steps=300;
-  let h=(b-a)/steps;
-  let sum=0;
-
-  for(let i=0;i<steps;i++){
-    let x1=a+i*h;
-    let x2=a+(i+1)*h;
-
+  let h=(b-a)/300,sum=0;
+  for(let i=0;i<300;i++){
+    let x1=a+i*h,x2=a+(i+1)*h;
     let y1=df?f(x1,df):f(x1);
     let y2=df?f(x2,df):f(x2);
-
     sum+=(y1+y2)/2*h;
   }
   return sum;
 }
 
-// ================= INVERSE NORMAL =================
 function invNorm(p){
   let a=[-39.6968,220.9461,-275.9285,138.3578,-30.6648,2.5066];
   let b=[-54.4761,161.5858,-155.6990,66.8013,-13.2807];
   let c=[-0.00778,-0.32239,-2.40075,-2.54973,4.37466,2.93816];
   let d=[0.00778,0.32246,2.44513,3.75440];
-
   let q;
 
   if(p<0.5){
@@ -187,191 +159,145 @@ function invNorm(p){
   }
 }
 
-// ================= INVERSE T =================
 function invT(p,df){
   let low=-10,high=10;
-
   for(let i=0;i<60;i++){
     let mid=(low+high)/2;
-    let cdf=integrate(t,-10,mid,df);
-
-    if(cdf<p) low=mid;
-    else high=mid;
+    let cdf=integrate(tdist,-10,mid,df);
+    if(cdf<p) low=mid; else high=mid;
   }
-
   return (low+high)/2;
 }
 
-// ================= DRAW HELPERS =================
-function line(x){
-  let l=board.create('line',[[x,0],[x,0.45]],{
-    dash:2,strokeColor:'black',strokeWidth:1
-  });
-  objects.push(l);
-}
+// ================= UI LOGIC =================
+function updateUI(){
+  let mode=document.getElementById('mode').value;
+  let op=document.getElementById('op');
 
-function shade(f,a,b,df){
-  let p=board.create('polygon',[
-    ...Array.from({length:120},(_,i)=>{
-      let x=a+i*(b-a)/120;
-      return [x,df?f(x,df):f(x)];
-    }),
-    [b,0],[a,0]
-  ],{fillOpacity:0.3});
+  if(mode==='z'){
+    op.innerHTML=`
+      <option value="lt">P(Z < z)</option>
+      <option value="gt">P(Z > z)</option>
+      <option value="bt">P(z1 < Z < z2)</option>`;
+    mainLabel.innerText="Value of z";
+    secondLabel.innerText="Second value of z (between only)";
+    dfLabel.style.display='none';
+    x2.style.display=(op.value==='bt')?'block':'none';
+  }
 
-  objects.push(p);
-}
+  if(mode==='t'){
+    op.innerHTML=`
+      <option value="lt">P(t < t)</option>
+      <option value="gt">P(t > t)</option>
+      <option value="bt">P(t1 < t < t2)</option>`;
+    mainLabel.innerText="Value of t";
+    secondLabel.innerText="Second value of t (between only)";
+    dfLabel.style.display='block';
+  }
 
-function curve(f,a,b,df){
-  let c=board.create('functiongraph',[
-    df?x=>f(x,df):f,a,b
-  ],{
-    strokeColor:'black',
-    strokeWidth:1
-  });
+  if(mode==='invz'){
+    op.innerHTML=`
+      <option value="lt">P(Z < z) = p</option>
+      <option value="gt">P(Z > z) = p</option>
+      <option value="two">Two-tailed</option>`;
+    mainLabel.innerText="Probability";
+    x2.style.display='none';
+    dfLabel.style.display='none';
+  }
 
-  objects.push(c);
-  return c;
-}
-
-function highlight(f,a,b,df){
-  let c=board.create('functiongraph',[
-    df?x=>f(x,df):f,a,b
-  ],{
-    strokeColor:'orange',
-    strokeWidth:4
-  });
-
-  objects.push(c);
+  if(mode==='invt'){
+    op.innerHTML=`
+      <option value="lt">P(t < t) = p</option>
+      <option value="gt">P(t > t) = p</option>
+      <option value="two">Two-tailed</option>`;
+    mainLabel.innerText="Probability";
+    x2.style.display='none';
+    dfLabel.style.display='block';
+  }
 }
 
 // ================= UPDATE =================
 function update(){
 
   clearAll();
+  updateUI();
 
-  let mode=document.getElementById('mode').value;
-  let op=document.getElementById('op').value;
-  let opInv=document.getElementById('opInv').value;
+  let mode=modeEl.value;
+  let op=opEl.value;
+  let x1=parseFloat(x1El.value);
+  let x2=parseFloat(x2El.value);
+  let df=parseFloat(dfEl.value);
 
-  let x1=parseFloat(document.getElementById('x1').value);
-  let x2=parseFloat(document.getElementById('x2').value);
-  let df=parseFloat(document.getElementById('df').value);
+  let pdf=(mode==='z'||mode==='invz')?normal:tdist;
 
-  let pdf=(mode==='z'||mode==='invz')?normal:t;
-
-  document.getElementById('opBlock').style.display=
-    (mode==='z'||mode==='t')?'block':'none';
-
-  document.getElementById('tailBlock').style.display=
-    (mode==='invz'||mode==='invt')?'block':'none';
-
-  document.getElementById('df').style.display=
-    (mode==='t'||mode==='invt')?'block':'none';
-
-  document.getElementById('secondLabel').style.display=
-    (op==='bt' && (mode==='z'||mode==='t'))?'block':'none';
+  drawCurve(pdf,(mode.includes('t')?df:null));
 
   let result=0;
 
-  // ================= PROBABILITY =================
   if(mode==='z'||mode==='t'){
-
-    curve(pdf,-4,4,mode==='t'?df:null);
-
     if(op==='lt'){
-      result=integrate(pdf,-4,x1,mode==='t'?df:null);
+      result=integrate(pdf,-4,x1,df);
       shade(pdf,-4,x1,df);
       highlight(pdf,-4,x1,df);
       line(x1);
     }
-
     if(op==='gt'){
-      result=integrate(pdf,x1,4,mode==='t'?df:null);
+      result=integrate(pdf,x1,4,df);
       shade(pdf,x1,4,df);
       highlight(pdf,x1,4,df);
       line(x1);
     }
-
     if(op==='bt'){
-      result=integrate(pdf,x1,x2,mode==='t'?df:null);
+      result=integrate(pdf,x1,x2,df);
       shade(pdf,x1,x2,df);
       highlight(pdf,x1,x2,df);
       line(x1); line(x2);
     }
-
-    document.getElementById('result').innerText=
-      "probability = "+result.toFixed(4);
+    resultEl.innerText="probability = "+result.toFixed(4);
   }
 
-  // ================= INVERSE =================
-  else {
-
-    let p=x1;
-    let z;
-
-    curve(pdf,-4,4,mode==='t'?df:null);
+  else{
+    let p=x1,z;
 
     if(mode==='invz'){
-
-      if(opInv==='lt'){
-        z=invNorm(p);
-        shade(normal,-4,z,null);
-        line(z);
-      }
-
-      if(opInv==='gt'){
-        z=invNorm(1-p);
-        shade(normal,z,4,null);
-        line(z);
-      }
-
-      if(opInv==='two'){
+      if(op==='lt'){ z=invNorm(p); shade(normal,-4,z); }
+      if(op==='gt'){ z=invNorm(1-p); shade(normal,z,4); }
+      if(op==='two'){
         z=invNorm(1-p/2);
-        let z2=-z;
-
-        shade(normal,-4,z2,null);
-        shade(normal,z,4,null);
-
-        line(z); line(z2);
+        shade(normal,-4,-z); shade(normal,z,4);
+        line(-z);
       }
-
-      document.getElementById('result').innerText="z = "+z.toFixed(4);
+      line(z);
+      resultEl.innerText="z = "+z.toFixed(4);
     }
 
     if(mode==='invt'){
-
-      if(opInv==='lt'){
-        z=invT(p,df);
-        shade(t,-4,z,df);
-        line(z);
-      }
-
-      if(opInv==='gt'){
-        z=invT(1-p,df);
-        shade(t,z,4,df);
-        line(z);
-      }
-
-      if(opInv==='two'){
+      if(op==='lt'){ z=invT(p,df); shade(tdist,-4,z,df); }
+      if(op==='gt'){ z=invT(1-p,df); shade(tdist,z,4,df); }
+      if(op==='two'){
         z=invT(1-p/2,df);
-        let z2=-z;
-
-        shade(t,-4,z2,df);
-        shade(t,z,4,df);
-
-        line(z); line(z2);
+        shade(tdist,-4,-z,df); shade(tdist,z,4,df);
+        line(-z);
       }
-
-      document.getElementById('result').innerText="t = "+z.toFixed(4);
+      line(z);
+      resultEl.innerText="t = "+z.toFixed(4);
     }
   }
 }
 
-// EVENTS
-document.querySelectorAll('input,select').forEach(e=>{
-  e.addEventListener('input',update);
-});
+// ================= INIT =================
+const modeEl=document.getElementById('mode');
+const opEl=document.getElementById('op');
+const x1El=document.getElementById('x1');
+const x2El=document.getElementById('x2');
+const dfEl=document.getElementById('df');
+const resultEl=document.getElementById('result');
+const mainLabel=document.getElementById('mainLabel');
+const secondLabel=document.getElementById('secondLabel');
+const dfLabel=document.getElementById('dfLabel');
+
+document.querySelectorAll('input,select')
+  .forEach(e=>e.addEventListener('input',update));
 
 update();
 
