@@ -21,7 +21,7 @@ body {
 }
 
 .panel {
-  width: 340px;
+  width: 360px;
   background: white;
   padding: 15px;
   border-radius: 10px;
@@ -39,6 +39,8 @@ input, select {
   margin: 6px 0;
   padding: 6px;
 }
+
+.hidden { display:none; }
 </style>
 </head>
 
@@ -52,21 +54,27 @@ input, select {
 
 <label>Mode</label>
 <select id="mode">
-  <option value="z">Z distribution (probability)</option>
+  <option value="z">Z distribution</option>
   <option value="invz">Inverse Z</option>
-  <option value="t">t distribution (probability)</option>
+  <option value="t">t distribution</option>
   <option value="invt">Inverse t</option>
 </select>
 
-<label>Distribution Inputs</label>
+<!-- distribution type -->
+<label id="opLabel">Operation</label>
+<select id="op">
+  <option value="lt">Less than</option>
+  <option value="gt">Greater than</option>
+  <option value="bt">Between</option>
+</select>
 
-<label id="lab1">z₁ / t₁</label>
+<label id="lab1">x₁</label>
 <input id="x1" type="number" value="0" step="0.1">
 
-<label id="lab2">z₂ / t₂</label>
+<label id="lab2">x₂</label>
 <input id="x2" type="number" value="1" step="0.1">
 
-<label>df (t only)</label>
+<label id="dfLabel">df (t only)</label>
 <input id="df" type="number" value="10">
 
 <div id="result" style="margin-top:10px;font-weight:bold;">
@@ -98,6 +106,7 @@ function t(x, df){
   return (num/den) * Math.pow(1 + (x*x)/df, -(df+1)/2);
 }
 
+// gamma approximation
 function gamma(z){
   let p = [
     0.99999999999980993,
@@ -118,8 +127,8 @@ function gamma(z){
   let x = p[0];
   for(let i=1;i<p.length;i++) x += p[i]/(z+i);
 
-  let t = z + g + 0.5;
-  return Math.sqrt(2*Math.PI)*Math.pow(t,z+0.5)*Math.exp(-t)*x;
+  let tt = z + g + 0.5;
+  return Math.sqrt(2*Math.PI)*Math.pow(tt,z+0.5)*Math.exp(-tt)*x;
 }
 
 // ================= INTEGRATION =================
@@ -175,63 +184,101 @@ function invT(p, df){
   return (low+high)/2;
 }
 
-// ================= DRAW HELPERS =================
+// ================= HELPERS =================
 function line(x){
   return board.create('line', [[x,0],[x,0.45]], {
     dash:2, strokeColor:'black', strokeWidth:1
   });
 }
 
-function label(x){
-  return board.create('text',[x,-0.02,function(){return x.toFixed(2);}]);
-}
-
 // ================= STATE =================
 let fill=null;
-let baseCurve=board.create('functiongraph',[normal,-4,4],{
+let curve=board.create('functiongraph',[normal,-4,4],{
   strokeColor:'black',
   strokeWidth:1
 });
 
+// ================= UI LOGIC =================
+function updateUI(){
+  let mode=document.getElementById('mode').value;
+  let op=document.getElementById('op');
+
+  let isProb = (mode==='z' || mode==='t');
+  let isInv = (mode==='invz' || mode==='invt');
+
+  op.style.display = isProb ? 'block' : 'none';
+  document.getElementById('x2').style.display =
+    (isProb && op.value==='bt') ? 'block' : 'none';
+
+  document.getElementById('df').style.display =
+    (mode==='t' || mode==='invt') ? 'block' : 'none';
+
+  document.getElementById('lab1').innerText =
+    (mode==='z'||mode==='invz') ? "z₁" : "t₁";
+
+  document.getElementById('lab2').innerText =
+    (mode==='z'||mode==='invz') ? "z₂" : "t₂";
+}
+
 // ================= UPDATE =================
 function update(){
 
+  updateUI();
+
   let mode=document.getElementById('mode').value;
+  let op=document.getElementById('op').value;
+
   let x1=parseFloat(document.getElementById('x1').value);
   let x2=parseFloat(document.getElementById('x2').value);
   let df=parseFloat(document.getElementById('df').value);
 
   let pdf = (mode.includes('z')) ? normal : (x)=>t(x,df);
 
-  document.getElementById('lab1').innerText = mode.includes('z') ? "z₁" : "t₁";
-  document.getElementById('lab2').innerText = mode.includes('z') ? "z₂" : "t₂";
-
   if(fill) board.removeObject(fill);
 
   let result=0;
 
+  function shade(a,b){
+    fill = board.create('polygon',[
+      ...Array.from({length:120},(_,i)=>{
+        let x=a+i*(b-a)/120;
+        return [x,pdf(x)];
+      }),
+      [b,0],[a,0]
+    ],{fillOpacity:0.3});
+  }
+
   function orange(a,b){
-    return board.create('functiongraph',[pdf,a,b],{
+    board.create('functiongraph',[pdf,a,b],{
       strokeColor:'orange',
       strokeWidth:4
     });
   }
 
-  // ================= Z PROB =================
-  if(mode==='z'){
-    result = integrate(pdf,-4,x1);
+  // ================= PROBABILITY MODES =================
+  if(mode==='z' || mode==='t'){
 
-    fill = board.create('polygon',[
-      ...Array.from({length:120},(_,i)=>{
-        let x=-4+i*(x1+4)/120;
-        return [x,pdf(x)];
-      }),
-      [x1,0],[-4,0]
-    ],{fillOpacity:0.3});
+    if(op==='lt'){
+      result = integrate(pdf,-4,x1,mode==='t'?df:null);
+      shade(-4,x1);
+      orange(-4,x1);
+      line(x1);
+    }
 
-    orange(-4,x1);
-    line(x1);
-    label(x1);
+    else if(op==='gt'){
+      result = integrate(pdf,x1,4,mode==='t'?df:null);
+      shade(x1,4);
+      orange(x1,4);
+      line(x1);
+    }
+
+    else if(op==='bt'){
+      result = integrate(pdf,x1,x2,mode==='t'?df:null);
+      shade(x1,x2);
+      orange(x1,x2);
+      line(x1);
+      line(x2);
+    }
 
     document.getElementById('result').innerText =
       "probability = " + result.toFixed(4);
@@ -240,37 +287,13 @@ function update(){
   // ================= INV Z =================
   else if(mode==='invz'){
     result = invNorm(x1);
-
     document.getElementById('result').innerText =
       "z = " + result.toFixed(4);
-  }
-
-  // ================= T PROB =================
-  else if(mode==='t'){
-    result = integrate(pdf,x1,x2,df);
-
-    fill = board.create('polygon',[
-      ...Array.from({length:120},(_,i)=>{
-        let x=x1+i*(x2-x1)/120;
-        return [x,pdf(x,df)];
-      }),
-      [x2,0],[x1,0]
-    ],{fillOpacity:0.3});
-
-    orange(x1,x2);
-    line(x1);
-    line(x2);
-    label(x1);
-    label(x2);
-
-    document.getElementById('result').innerText =
-      "probability = " + result.toFixed(4);
   }
 
   // ================= INV T =================
   else if(mode==='invt'){
     result = invT(x1,df);
-
     document.getElementById('result').innerText =
       "t = " + result.toFixed(4);
   }
