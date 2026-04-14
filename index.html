@@ -25,21 +25,16 @@ input, select { width:100%; margin:6px 0; padding:6px; }
 <div class="panel">
 
 <label>Mode</label>
-<select id="mode">
-  <option value="z">Z distribution</option>
-  <option value="t">t distribution</option>
-  <option value="invz">Inverse Z</option>
-  <option value="invt">Inverse t</option>
-</select>
+<select id="mode"></select>
 
 <label>Operation</label>
 <select id="op"></select>
 
 <label id="mainLabel"></label>
-<input id="x1" type="number" value="0" step="0.1">
+<input id="x1" type="number" value="0">
 
 <label id="secondLabel"></label>
-<input id="x2" type="number" value="1" step="0.1">
+<input id="x2" type="number" value="1">
 
 <label id="dfLabel">df</label>
 <input id="df" type="number" value="10">
@@ -54,111 +49,7 @@ input, select { width:100%; margin:6px 0; padding:6px; }
 
 <script>
 
-// ================= BOARD =================
-const board = JXG.JSXGraph.initBoard('box', {
-  boundingbox: [-4,0.45,4,-0.05],
-  axis:true
-});
-
-let objects=[];
-function clearAll(){
-  objects.forEach(o=>board.removeObject(o));
-  objects=[];
-}
-
-// ================= PDFS =================
-function normal(x){
-  return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x);
-}
-
-function tdist(x,df){
-  let num=gamma((df+1)/2);
-  let den=Math.sqrt(df*Math.PI)*gamma(df/2);
-  return (num/den)*Math.pow(1+(x*x)/df,-(df+1)/2);
-}
-
-function gamma(z){
-  let p=[0.99999999999980993,676.5203681218851,-1259.1392167224028,
-  771.32342877765313,-176.61502916214059,12.507343278686905,
-  -0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
-
-  let g=7;
-  if(z<0.5) return Math.PI/(Math.sin(Math.PI*z)*gamma(1-z));
-
-  z-=1;
-  let x=p[0];
-  for(let i=1;i<p.length;i++) x+=p[i]/(z+i);
-
-  let t=z+g+0.5;
-  return Math.sqrt(2*Math.PI)*Math.pow(t,z+0.5)*Math.exp(-t)*x;
-}
-
-// ================= DRAW =================
-function drawCurve(f,df){
-  objects.push(board.create('functiongraph',[
-    df?x=>f(x,df):f,-4,4
-  ],{strokeWidth:1}));
-}
-
-function highlight(f,a,b,df){
-  objects.push(board.create('functiongraph',[
-    df?x=>f(x,df):f,a,b
-  ],{strokeColor:'orange',strokeWidth:4}));
-}
-
-function shade(f,a,b,df){
-  objects.push(board.create('polygon',[
-    ...Array.from({length:100},(_,i)=>{
-      let x=a+i*(b-a)/100;
-      return [x,df?f(x,df):f(x)];
-    }),
-    [b,0],[a,0]
-  ],{fillOpacity:0.3});
-}
-
-function line(x){
-  objects.push(board.create('line',[[x,0],[x,0.45]],{dash:2}));
-}
-
-function label(x,text){
-  objects.push(board.create('text',[x,-0.02,text]));
-}
-
-// ================= MATH =================
-function integrate(f,a,b,df=null){
-  let h=(b-a)/300,sum=0;
-  for(let i=0;i<300;i++){
-    let x1=a+i*h,x2=a+(i+1)*h;
-    let y1=df?f(x1,df):f(x1);
-    let y2=df?f(x2,df):f(x2);
-    sum+=(y1+y2)/2*h;
-  }
-  return sum;
-}
-
-function invNorm(p){
-  return Math.sqrt(2)*erfInv(2*p-1);
-}
-
-function erfInv(x){
-  let a=0.147;
-  let ln=Math.log(1-x*x);
-  let part1=2/(Math.PI*a)+ln/2;
-  let part2=ln/a;
-  return Math.sign(x)*Math.sqrt(Math.sqrt(part1*part1-part2)-part1);
-}
-
-function invT(p,df){
-  let low=-10,high=10;
-  for(let i=0;i<60;i++){
-    let mid=(low+high)/2;
-    let cdf=integrate(tdist,-10,mid,df);
-    if(cdf<p) low=mid; else high=mid;
-  }
-  return (low+high)/2;
-}
-
-// ================= UI SETUP =================
+// ================= INIT =================
 const modeEl=document.getElementById('mode');
 const opEl=document.getElementById('op');
 const x1El=document.getElementById('x1');
@@ -169,6 +60,15 @@ const secondLabel=document.getElementById('secondLabel');
 const dfLabel=document.getElementById('dfLabel');
 const resultEl=document.getElementById('result');
 
+// populate mode ONCE
+modeEl.innerHTML=`
+<option value="z">Z distribution</option>
+<option value="t">t distribution</option>
+<option value="invz">Inverse Z</option>
+<option value="invt">Inverse t</option>
+`;
+
+// ================= UI SET =================
 function setUI(){
 
   let mode=modeEl.value;
@@ -223,7 +123,96 @@ function setUI(){
     dfLabel.style.display='block';
   }
 
-  update(); // run calculation AFTER UI set
+  update();
+}
+
+// ================= GRAPH =================
+const board = JXG.JSXGraph.initBoard('box', {
+  boundingbox: [-4,0.45,4,-0.05],
+  axis:true
+});
+
+let objects=[];
+function clearAll(){
+  objects.forEach(o=>board.removeObject(o));
+  objects=[];
+}
+
+// ================= FUNCTIONS =================
+function normal(x){ return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x); }
+
+function tdist(x,df){
+  let num=gamma((df+1)/2);
+  let den=Math.sqrt(df*Math.PI)*gamma(df/2);
+  return (num/den)*Math.pow(1+(x*x)/df,-(df+1)/2);
+}
+
+function gamma(z){
+  let p=[0.99999999999980993,676.5203681218851,-1259.1392167224028,
+  771.32342877765313,-176.61502916214059,12.507343278686905,
+  -0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  let g=7;
+  if(z<0.5) return Math.PI/(Math.sin(Math.PI*z)*gamma(1-z));
+  z-=1;
+  let x=p[0];
+  for(let i=1;i<p.length;i++) x+=p[i]/(z+i);
+  let t=z+g+0.5;
+  return Math.sqrt(2*Math.PI)*Math.pow(t,z+0.5)*Math.exp(-t)*x;
+}
+
+// ================= DRAW =================
+function drawCurve(f,df){
+  objects.push(board.create('functiongraph',[df?x=>f(x,df):f,-4,4]));
+}
+
+function shade(f,a,b,df){
+  objects.push(board.create('polygon',[
+    ...Array.from({length:100},(_,i)=>{
+      let x=a+i*(b-a)/100;
+      return [x,df?f(x,df):f(x)];
+    }),
+    [b,0],[a,0]
+  ],{fillOpacity:0.3}));
+}
+
+function line(x){
+  objects.push(board.create('line',[[x,0],[x,0.45]],{dash:2}));
+}
+
+function label(x,text){
+  objects.push(board.create('text',[x,-0.02,text]));
+}
+
+// ================= CALC =================
+function integrate(f,a,b,df=null){
+  let h=(b-a)/300,sum=0;
+  for(let i=0;i<300;i++){
+    let x1=a+i*h,x2=a+(i+1)*h;
+    let y1=df?f(x1,df):f(x1);
+    let y2=df?f(x2,df):f(x2);
+    sum+=(y1+y2)/2*h;
+  }
+  return sum;
+}
+
+function invNorm(p){ return Math.sqrt(2)*erfInv(2*p-1); }
+
+function erfInv(x){
+  let a=0.147;
+  let ln=Math.log(1-x*x);
+  let part1=2/(Math.PI*a)+ln/2;
+  let part2=ln/a;
+  return Math.sign(x)*Math.sqrt(Math.sqrt(part1*part1-part2)-part1);
+}
+
+function invT(p,df){
+  let low=-10,high=10;
+  for(let i=0;i<60;i++){
+    let mid=(low+high)/2;
+    let cdf=integrate(tdist,-10,mid,df);
+    if(cdf<p) low=mid; else high=mid;
+  }
+  return (low+high)/2;
 }
 
 // ================= UPDATE =================
@@ -244,64 +233,40 @@ function update(){
   let result=0;
 
   if(mode==='z'||mode==='t'){
-    if(op==='lt'){
-      result=integrate(pdf,-4,x1,df);
-      shade(pdf,-4,x1,df);
-      highlight(pdf,-4,x1,df);
-      line(x1); label(x1,x1.toFixed(2));
-    }
-    if(op==='gt'){
-      result=integrate(pdf,x1,4,df);
-      shade(pdf,x1,4,df);
-      highlight(pdf,x1,4,df);
-      line(x1); label(x1,x1.toFixed(2));
-    }
-    if(op==='bt'){
-      result=integrate(pdf,x1,x2,df);
-      shade(pdf,x1,x2,df);
-      highlight(pdf,x1,x2,df);
-      line(x1); line(x2);
-      label(x1,x1.toFixed(2));
-      label(x2,x2.toFixed(2));
-    }
+    if(op==='lt'){ result=integrate(pdf,-4,x1,df); shade(pdf,-4,x1,df); line(x1); label(x1,x1.toFixed(2)); }
+    if(op==='gt'){ result=integrate(pdf,x1,4,df); shade(pdf,x1,4,df); line(x1); label(x1,x1.toFixed(2)); }
+    if(op==='bt'){ result=integrate(pdf,x1,x2,df); shade(pdf,x1,x2,df); line(x1); line(x2); label(x1,x1.toFixed(2)); label(x2,x2.toFixed(2)); }
     resultEl.innerText="probability = "+result.toFixed(4);
   }
 
   else{
     let p=x1,z;
-
     if(mode==='invz'){
       if(op==='lt'){ z=invNorm(p); shade(normal,-4,z); }
       if(op==='gt'){ z=invNorm(1-p); shade(normal,z,4); }
-      if(op==='two'){
-        z=invNorm(1-p/2);
-        shade(normal,-4,-z); shade(normal,z,4);
-        line(-z); label(-z,(-z).toFixed(2));
-      }
+      if(op==='two'){ z=invNorm(1-p/2); shade(normal,-4,-z); shade(normal,z,4); line(-z); label(-z,(-z).toFixed(2)); }
       line(z); label(z,z.toFixed(2));
       resultEl.innerText="z = "+z.toFixed(4);
     }
-
     if(mode==='invt'){
       if(op==='lt'){ z=invT(p,df); shade(tdist,-4,z,df); }
       if(op==='gt'){ z=invT(1-p,df); shade(tdist,z,4,df); }
-      if(op==='two'){
-        z=invT(1-p/2,df);
-        shade(tdist,-4,-z,df); shade(tdist,z,4,df);
-        line(-z); label(-z,(-z).toFixed(2));
-      }
+      if(op==='two'){ z=invT(1-p/2,df); shade(tdist,-4,-z,df); shade(tdist,z,4,df); line(-z); label(-z,(-z).toFixed(2)); }
       line(z); label(z,z.toFixed(2));
       resultEl.innerText="t = "+z.toFixed(4);
     }
   }
 }
 
-// EVENTS
-modeEl.addEventListener('change',setUI);
-document.querySelectorAll('input,select')
-  .forEach(e=>e.addEventListener('input',update));
+// ================= EVENTS =================
+modeEl.addEventListener('change', setUI);
+opEl.addEventListener('change', update);
 
-// INITIALIZE
+x1El.addEventListener('input', update);
+x2El.addEventListener('input', update);
+dfEl.addEventListener('input', update);
+
+// INIT
 setUI();
 
 </script>
