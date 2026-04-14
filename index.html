@@ -25,30 +25,21 @@ input, select { width:100%; margin:6px 0; padding:6px; }
 <div class="panel">
 
 <label>Mode</label>
-<select id="mode">
-  <option value="z">Z distribution</option>
-  <option value="t">t distribution</option>
-  <option value="invz">Inverse Z</option>
-  <option value="invt">Inverse t</option>
-</select>
+<select id="mode"></select>
 
-<div id="opBlock">
 <label>Operation</label>
 <select id="op"></select>
-</div>
 
-<label id="mainLabel">Value</label>
-<input id="x1" type="number" value="0" step="0.1">
+<label id="mainLabel"></label>
+<input id="x1" type="number">
 
-<label id="secondLabel">Second value</label>
-<input id="x2" type="number" value="1" step="0.1">
+<label id="secondLabel"></label>
+<input id="x2" type="number">
 
 <label id="dfLabel">df</label>
 <input id="df" type="number" value="10">
 
-<div id="result" style="margin-top:10px;font-weight:bold;">
-result = 0
-</div>
+<div id="result"><b>result = 0</b></div>
 
 </div>
 
@@ -64,17 +55,23 @@ const board = JXG.JSXGraph.initBoard('box', {
   axis:true
 });
 
-// ================= PDFS =================
-function normal(x){
-  return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x);
+let objects=[];
+
+function clearAll(){
+  objects.forEach(o=>board.removeObject(o));
+  objects=[];
 }
 
+// ================= PDFS =================
+function normal(x){ return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x); }
+
 function tdist(x,df){
-  let num = gamma((df+1)/2);
-  let den = Math.sqrt(df*Math.PI)*gamma(df/2);
+  let num=gamma((df+1)/2);
+  let den=Math.sqrt(df*Math.PI)*gamma(df/2);
   return (num/den)*Math.pow(1+(x*x)/df,-(df+1)/2);
 }
 
+// gamma
 function gamma(z){
   let p=[0.99999999999980993,676.5203681218851,-1259.1392167224028,
   771.32342877765313,-176.61502916214059,12.507343278686905,
@@ -91,42 +88,31 @@ function gamma(z){
   return Math.sqrt(2*Math.PI)*Math.pow(t,z+0.5)*Math.exp(-t)*x;
 }
 
-// ================= CLEAN STATE =================
-let objects=[];
-function clearAll(){
-  objects.forEach(o=>board.removeObject(o));
-  objects=[];
-}
-
 // ================= DRAW =================
 function drawCurve(f,df){
-  let c=board.create('functiongraph',[
+  objects.push(board.create('functiongraph',[
     df?x=>f(x,df):f,-4,4
-  ],{strokeColor:'black',strokeWidth:1});
-  objects.push(c);
+  ],{strokeWidth:1}));
 }
 
 function highlight(f,a,b,df){
-  let c=board.create('functiongraph',[
+  objects.push(board.create('functiongraph',[
     df?x=>f(x,df):f,a,b
-  ],{strokeColor:'orange',strokeWidth:4});
-  objects.push(c);
+  ],{strokeColor:'orange',strokeWidth:4}));
 }
 
 function shade(f,a,b,df){
-  let p=board.create('polygon',[
-    ...Array.from({length:120},(_,i)=>{
-      let x=a+i*(b-a)/120;
+  objects.push(board.create('polygon',[
+    ...Array.from({length:100},(_,i)=>{
+      let x=a+i*(b-a)/100;
       return [x,df?f(x,df):f(x)];
     }),
     [b,0],[a,0]
-  ],{fillOpacity:0.3});
-  objects.push(p);
+  ],{fillOpacity:0.3}));
 }
 
 function line(x){
-  let l=board.create('line',[[x,0],[x,0.45]],{dash:2});
-  objects.push(l);
+  objects.push(board.create('line',[[x,0],[x,0.45]],{dash:2}));
 }
 
 // ================= MATH =================
@@ -142,21 +128,16 @@ function integrate(f,a,b,df=null){
 }
 
 function invNorm(p){
-  let a=[-39.6968,220.9461,-275.9285,138.3578,-30.6648,2.5066];
-  let b=[-54.4761,161.5858,-155.6990,66.8013,-13.2807];
-  let c=[-0.00778,-0.32239,-2.40075,-2.54973,4.37466,2.93816];
-  let d=[0.00778,0.32246,2.44513,3.75440];
-  let q;
+  return Math.sqrt(2)*erfInv(2*p-1);
+}
 
-  if(p<0.5){
-    q=Math.sqrt(-2*Math.log(p));
-    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
-           ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
-  } else {
-    q=Math.sqrt(-2*Math.log(1-p));
-    return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
-             ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
-  }
+// approximation
+function erfInv(x){
+  let a=0.147;
+  let ln=Math.log(1-x*x);
+  let part1=2/(Math.PI*a)+ln/2;
+  let part2=ln/a;
+  return Math.sign(x)*Math.sqrt(Math.sqrt(part1*part1-part2)-part1);
 }
 
 function invT(p,df){
@@ -169,50 +150,79 @@ function invT(p,df){
   return (low+high)/2;
 }
 
-// ================= UI LOGIC =================
+// ================= UI =================
+const modeEl=document.getElementById('mode');
+const opEl=document.getElementById('op');
+const x1El=document.getElementById('x1');
+const x2El=document.getElementById('x2');
+const dfEl=document.getElementById('df');
+const mainLabel=document.getElementById('mainLabel');
+const secondLabel=document.getElementById('secondLabel');
+const dfLabel=document.getElementById('dfLabel');
+const resultEl=document.getElementById('result');
+
+// initialize modes ONCE
+modeEl.innerHTML=`
+<option value="z">Z distribution</option>
+<option value="t">t distribution</option>
+<option value="invz">Inverse Z</option>
+<option value="invt">Inverse t</option>
+`;
+
 function updateUI(){
-  let mode=document.getElementById('mode').value;
-  let op=document.getElementById('op');
+
+  let mode=modeEl.value;
+
+  // preserve selection
+  let old=opEl.value;
 
   if(mode==='z'){
-    op.innerHTML=`
+    opEl.innerHTML=`
       <option value="lt">P(Z < z)</option>
       <option value="gt">P(Z > z)</option>
       <option value="bt">P(z1 < Z < z2)</option>`;
     mainLabel.innerText="Value of z";
     secondLabel.innerText="Second value of z (between only)";
     dfLabel.style.display='none';
-    x2.style.display=(op.value==='bt')?'block':'none';
+    x2El.style.display='block';
   }
 
   if(mode==='t'){
-    op.innerHTML=`
-      <option value="lt">P(t < t)</option>
-      <option value="gt">P(t > t)</option>
-      <option value="bt">P(t1 < t < t2)</option>`;
+    opEl.innerHTML=`
+      <option value="lt">P(T < t)</option>
+      <option value="gt">P(T > t)</option>
+      <option value="bt">P(t1 < T < t2)</option>`;
     mainLabel.innerText="Value of t";
     secondLabel.innerText="Second value of t (between only)";
     dfLabel.style.display='block';
+    x2El.style.display='block';
   }
 
   if(mode==='invz'){
-    op.innerHTML=`
+    opEl.innerHTML=`
       <option value="lt">P(Z < z) = p</option>
       <option value="gt">P(Z > z) = p</option>
       <option value="two">Two-tailed</option>`;
     mainLabel.innerText="Probability";
-    x2.style.display='none';
+    x2El.style.display='none';
+    secondLabel.style.display='none';
     dfLabel.style.display='none';
   }
 
   if(mode==='invt'){
-    op.innerHTML=`
-      <option value="lt">P(t < t) = p</option>
-      <option value="gt">P(t > t) = p</option>
+    opEl.innerHTML=`
+      <option value="lt">P(T < t) = p</option>
+      <option value="gt">P(T > t) = p</option>
       <option value="two">Two-tailed</option>`;
     mainLabel.innerText="Probability";
-    x2.style.display='none';
+    x2El.style.display='none';
+    secondLabel.style.display='none';
     dfLabel.style.display='block';
+  }
+
+  // restore selection if possible
+  if([...opEl.options].some(o=>o.value===old)){
+    opEl.value=old;
   }
 }
 
@@ -228,7 +238,7 @@ function update(){
   let x2=parseFloat(x2El.value);
   let df=parseFloat(dfEl.value);
 
-  let pdf=(mode==='z'||mode==='invz')?normal:tdist;
+  let pdf=(mode.includes('z'))?normal:tdist;
 
   drawCurve(pdf,(mode.includes('t')?df:null));
 
@@ -285,20 +295,12 @@ function update(){
   }
 }
 
-// ================= INIT =================
-const modeEl=document.getElementById('mode');
-const opEl=document.getElementById('op');
-const x1El=document.getElementById('x1');
-const x2El=document.getElementById('x2');
-const dfEl=document.getElementById('df');
-const resultEl=document.getElementById('result');
-const mainLabel=document.getElementById('mainLabel');
-const secondLabel=document.getElementById('secondLabel');
-const dfLabel=document.getElementById('dfLabel');
-
+// events
+modeEl.addEventListener('change',updateUI);
 document.querySelectorAll('input,select')
   .forEach(e=>e.addEventListener('input',update));
 
+updateUI();
 update();
 
 </script>
