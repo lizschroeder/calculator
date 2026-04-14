@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Stats Calculator (Z & t)</title>
+
+<script src="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f4f4;
+  margin: 0;
+  padding: 20px;
+}
+
+.container {
+  display: flex;
+  gap: 20px;
+}
+
+.panel {
+  width: 300px;
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.graph {
+  flex: 1;
+  background: white;
+  border-radius: 10px;
+  height: 500px;
+}
+
+select, input {
+  width: 100%;
+  padding: 6px;
+  margin: 5px 0 10px 0;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Interactive Z / t Distribution Calculator</h2>
+
+<div class="container">
+
+<!-- CONTROLS -->
+<div class="panel">
+
+<label>Distribution</label>
+<select id="dist">
+  <option value="z">Z (Normal)</option>
+  <option value="t">t</option>
+</select>
+
+<label>Mode</label>
+<select id="mode">
+  <option value="left">P(X < x)</option>
+  <option value="right">P(X > x)</option>
+  <option value="between">P(a < X < b)</option>
+</select>
+
+<label>x</label>
+<input id="x" type="number" value="0" step="0.1">
+
+<label>y (for between)</label>
+<input id="y" type="number" value="1" step="0.1">
+
+<label>df (t only)</label>
+<input id="df" type="number" value="10">
+
+<div id="result" style="margin-top:10px;font-weight:bold;"></div>
+
+</div>
+
+<!-- GRAPH -->
+<div id="box" class="graph"></div>
+
+</div>
+
+<script>
+// ---------- BOARD ----------
+const board = JXG.JSXGraph.initBoard('box', {
+  boundingbox: [-4, 0.45, 4, -0.05],
+  axis: true
+});
+
+// ---------- PDF FUNCTIONS ----------
+function normalPDF(x){
+  return (1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*x*x);
+}
+
+// rough t approximation (good enough for visualization)
+function tPDF(x, df){
+  return (1/Math.sqrt(df*Math.PI)) * Math.pow(1 + (x*x)/df, -(df+1)/2);
+}
+
+// numeric integration (simple trapezoid)
+function integrate(f, a, b, steps=200, df=null){
+  let h = (b-a)/steps;
+  let sum = 0;
+  for(let i=0;i<steps;i++){
+    let x1 = a + i*h;
+    let x2 = a + (i+1)*h;
+
+    let y1 = df ? f(x1, df) : f(x1);
+    let y2 = df ? f(x2, df) : f(x2);
+
+    sum += (y1+y2)/2 * h;
+  }
+  return sum;
+}
+
+// ---------- CURVE ----------
+let curve = board.create('functiongraph', [normalPDF, -4, 4]);
+
+// shaded curve (dynamic)
+let shade = board.create('curve', [[0],[0]], {strokeColor:'blue', fillOpacity:0.2});
+
+// ---------- UPDATE ----------
+function update(){
+
+  let dist = document.getElementById('dist').value;
+  let mode = document.getElementById('mode').value;
+  let x = parseFloat(document.getElementById('x').value);
+  let y = parseFloat(document.getElementById('y').value);
+  let df = parseFloat(document.getElementById('df').value);
+
+  let pdf = (dist === 'z')
+    ? normalPDF
+    : (x)=>tPDF(x,df);
+
+  let area = 0;
+
+  if(mode === 'left'){
+    area = integrate(pdf, -4, x, 200, dist==='t'?df:null);
+  }
+  else if(mode === 'right'){
+    area = integrate(pdf, x, 4, 200, dist==='t'?df:null);
+  }
+  else{
+    area = integrate(pdf, x, y, 200, dist==='t'?df:null);
+  }
+
+  document.getElementById('result').innerText =
+    "Area ≈ " + area.toFixed(4);
+
+  board.update();
+}
+
+// event listeners
+document.querySelectorAll('input, select').forEach(el=>{
+  el.addEventListener('input', update);
+});
+
+update();
+</script>
+
+</body>
+</html>
