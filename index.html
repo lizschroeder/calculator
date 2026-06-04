@@ -252,11 +252,6 @@ function erfInv(x){
 
 function invT(p,df){
 
-  // For large df, use the normal approximation
-  if(df > 200){
-    return invNorm(p);
-  }
-
   let low=-10,high=10;
 
   for(let i=0;i<60;i++){
@@ -286,17 +281,9 @@ function update(){
 
   let pdf;
 
-if(mode.includes('z')){
-    pdf = normal;
-}
-else if(df > 100){
-    pdf = normal;
-}
-else{
-    pdf = tdist;
-}
+let pdf = mode.includes('z') ? normal : tdist;
 
-drawCurve(pdf, (pdf===tdist ? df : null));
+drawCurve(pdf, mode.includes('t') ? df : null);
 
   let result=0;
 
