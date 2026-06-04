@@ -239,14 +239,19 @@ function update(){
   let x2=parseFloat(x2El.value);
   let df=parseFloat(dfEl.value);
 
-  let pdf=(mode.includes('z'))?normal:tdist;
+  let pdf;
 
-  if(mode==='invt' && df>200){
-    drawCurve(normal,null);
+if(mode.includes('z')){
+    pdf = normal;
+}
+else if(df > 100){
+    pdf = normal;
 }
 else{
-    drawCurve(pdf,(mode.includes('t')?df:null));
+    pdf = tdist;
 }
+
+drawCurve(pdf, (pdf===tdist ? df : null));
 
   let result=0;
 
