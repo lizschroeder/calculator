@@ -206,12 +206,25 @@ function erfInv(x){
 }
 
 function invT(p,df){
+
+  // For large df, use the normal approximation
+  if(df > 200){
+    return invNorm(p);
+  }
+
   let low=-10,high=10;
+
   for(let i=0;i<60;i++){
     let mid=(low+high)/2;
     let cdf=integrate(tdist,-10,mid,df);
-    if(cdf<p) low=mid; else high=mid;
+
+    if(cdf<p){
+      low=mid;
+    } else {
+      high=mid;
+    }
   }
+
   return (low+high)/2;
 }
 
